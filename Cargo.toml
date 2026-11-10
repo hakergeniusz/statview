@@ -1,0 +1,12 @@
+[package]
+name = "horizon-statview"
+version = "1.0.0"
+edition = "2024"
+license = "MIT"
+description = "A rebuilt Statistics screen: search, sort, and an item grid with counts. A Horizon native mod."
+publish = false
+
+# The runtime doubles as the mod's library (its tests) and the module the
+# bundle injects into the game; the helper files compile only inside it.
+[lib]
+path = "mixins/statview/runtime.rs"

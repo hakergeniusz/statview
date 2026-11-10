@@ -1,0 +1,17 @@
+{
+  "horizon_revision": "2ebf00a0281c592f79191e76fce0e7d522c6f425",
+  "source_sha256": {
+    "crates/horizon-client/src/game.rs": "b12f409bf298f8d7f40f2e79e7e39d5fe7ebe464ecbbeac6914d7814d114de23",
+    "crates/horizon-client/src/game/native_hooks.rs": "2cb9c8f04dd92484ae22788c61d658a76b34ab74bf9deab06b0e44958eecd5bd",
+    "crates/horizon-client/src/game/stats_screen.rs": "7401bedb2210cbe615924c8e15c97effb705d14030720e2ce406c18d9d300f92",
+    "crates/horizon-client/src/game/control.rs": "10a22932d9d35224e860a41aed6c8e02bf991c779cfd4edb0f4572e1b99288b1"
+  },
+  "horizon_repository": "https://github.com/horizon-rust/horizon",
+  "horizon_mixins_repository": "https://github.com/horizon-rust/horizon-mixins",
+  "horizon_mixins_revision": "5a64af938ec86b00d53d16a408aabc0038fb3e57",
+  "mixin_schema": 6,
+  "clean_room": {
+    "inspired_by": "Better Statistics Screen (TheCSDev) — feature ideas only",
+    "note": "its license reserves all rights; nothing from it is copied or derived"
+  }
+}

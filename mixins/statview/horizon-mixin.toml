@@ -1,0 +1,138 @@
+[mod]
+id = "statview"
+version = "1.0.0"
+priority = 100
+
+# The commit it was tested on: it redraws the Statistics screen whole and
+# answers its keys, clicks, wheel and typed text, so a Horizon change in the
+# stats-screen, control or mod-hook sources needs a re-check.
+[compatibility]
+horizon_revision = "2ebf00a0281c592f79191e76fce0e7d522c6f425"
+
+# The mod's brain: pure standard library, no game types, tested on its own —
+# the view model (search, caret, tabs, sort, scroll) and the value formats.
+[[module]]
+id = "runtime"
+file = "crates/horizon-client/src/game.rs"
+name = "statview"
+source = "runtime.rs"
+
+# The Statistics screen drawn whole while the mod asks: the vanilla drawing
+# is skipped (the hook breaks) and the rebuilt one runs — search box, tabs,
+# the Items grid with count badges, the mob and general rows.
+[[injection]]
+id = "draw"
+kind = "HEAD"
+cancellable = true
+target = "horizon_client::game::stats_screen::Game<'_>::draw_stats"
+helper = "draw.rs"
+bindings = [
+  { name = "game", ty = "&mut crate::game::Game<'_>", value = "&mut *self" },
+  { name = "batch", ty = "&mut horizon_client::hud::HudBatch", value = "batch" },
+]
+
+# A key on the screen: the search box's editing, Ctrl+F, the tab digits and
+# Ctrl+Tab. The rest goes on to the vanilla handler.
+[[injection]]
+id = "key"
+kind = "HEAD"
+cancellable = true
+target = "horizon_client::game::stats_screen::Game<'_>::stats_key"
+helper = "key.rs"
+bindings = [
+  { name = "game", ty = "&mut crate::game::Game<'_>", value = "&mut *self" },
+  { name = "key", ty = "winit::keyboard::KeyCode", value = "key" },
+]
+
+# Typed characters while the search box holds the keyboard.
+[[injection]]
+id = "text"
+kind = "HEAD"
+cancellable = true
+target = "horizon_client::game::control::Game<'_>::type_chars_into_screen"
+helper = "text.rs"
+bindings = [
+  { name = "game", ty = "&mut crate::game::Game<'_>", value = "&mut *self" },
+  { name = "text", ty = "&str", value = "text" },
+]
+
+# A click: Done, the tabs, the search box's caret, the sort headers, the
+# grid's slots and the scrollbar.
+[[injection]]
+id = "screen-click"
+kind = "HEAD"
+cancellable = true
+target = "horizon_client::game::stats_screen::Game<'_>::stats_click"
+helper = "screen_click.rs"
+bindings = [
+  { name = "game", ty = "&mut crate::game::Game<'_>", value = "&mut *self" },
+  { name = "size", ty = "[u32; 2]", value = "size" },
+]
+
+# A wheel tick: the view's scroll, clamped to the drawn content.
+[[injection]]
+id = "wheel"
+kind = "HEAD"
+cancellable = true
+target = "horizon_client::game::stats_screen::Game<'_>::stats_scroll"
+helper = "scroll.rs"
+bindings = [
+  { name = "game", ty = "&mut crate::game::Game<'_>", value = "&mut *self" },
+  { name = "amount", ty = "f32", value = "amount" },
+]
+
+# A mouse release: the mod owns the screen's clicks, so the vanilla
+# scrollbar hold never runs while it asks.
+[[injection]]
+id = "release"
+kind = "HEAD"
+cancellable = true
+target = "horizon_client::game::stats_screen::Game<'_>::stats_release"
+helper = "release.rs"
+bindings = [
+  { name = "game", ty = "&mut crate::game::Game<'_>", value = "&mut *self" },
+]
+
+# The screen opened: the view starts over.
+[[injection]]
+id = "opened"
+kind = "HEAD"
+target = "horizon_client::game::stats_screen::Game<'_>::open_stats"
+helper = "open.rs"
+bindings = [
+  { name = "game", ty = "&mut crate::game::Game<'_>", value = "&mut *self" },
+]
+
+# The row in Options > Mods: the single Enabled toggle.
+[[injection]]
+id = "list"
+kind = "HEAD"
+target = "horizon_client::game::native_hooks::Game<'_>::native_mods"
+helper = "list.rs"
+bindings = [
+  { name = "mods", ty = "&mut Vec<crate::game::native_hooks::NativeMod>", value = "&mut *mods" },
+]
+
+# The settings page: the one Enabled row, in the state the file holds.
+[[injection]]
+id = "settings"
+kind = "HEAD"
+target = "horizon_client::game::native_hooks::Game<'_>::native_settings"
+helper = "settings.rs"
+bindings = [
+  { name = "game", ty = "&mut crate::game::Game<'_>", value = "&mut *self" },
+  { name = "mod_id", ty = "&str", value = "mod_id" },
+  { name = "buttons", ty = "&mut Vec<String>", value = "&mut *buttons" },
+]
+
+# A click on the settings page, stored for the next tick's gates to read.
+[[injection]]
+id = "settings-click"
+kind = "HEAD"
+target = "horizon_client::game::native_hooks::Game<'_>::native_settings_click"
+helper = "setting_click.rs"
+bindings = [
+  { name = "game", ty = "&mut crate::game::Game<'_>", value = "&mut *self" },
+  { name = "mod_id", ty = "&str", value = "mod_id" },
+  { name = "button", ty = "usize", value = "button" },
+]
