@@ -3,11 +3,11 @@
 // takes it; the digits and Ctrl+Tab move between tabs as the vanilla screen
 // taught. Everything else goes on to the vanilla handler.
 //
-// While the box is focused, printable keys are typed into it here, from the
-// key itself (US layout, shift-aware): the engine's char callback only
-// serves mod-opened screens, so a vanilla screen's hooks never hear typed
-// characters. The key is broken so nothing else sees it; control-held keys
-// stay shortcuts.
+// Typed characters are NOT the key hook's business: the engine delivers a
+// key press's characters itself, through its char callback — and it does so
+// for a broken key too (the canceled path replays the key's text), so
+// typing here as well doubled every keystroke in 1.0.2. The hook only
+// breaks the keys the box owns; the characters arrive on either path.
 // Copyright (c) 2026 hakergeniusz. MIT.
 fn statview_key(game: &mut crate::game::Game<'_>, key: winit::keyboard::KeyCode) -> core::ops::ControlFlow<()> {
     use crate::game::statview as statview;
@@ -55,73 +55,9 @@ fn statview_key(game: &mut crate::game::Game<'_>, key: winit::keyboard::KeyCode)
                     v.focused = false;
                     true
                 }
-                _ if !ctrl => {
-                    let letter = |base: char| {
-                        if shift {
-                            base.to_ascii_uppercase().to_string()
-                        } else {
-                            base.to_string()
-                        }
-                    };
-                    let text = match (key, shift) {
-                        (KeyCode::KeyA, _) => Some(letter('a')),
-                        (KeyCode::KeyB, _) => Some(letter('b')),
-                        (KeyCode::KeyC, _) => Some(letter('c')),
-                        (KeyCode::KeyD, _) => Some(letter('d')),
-                        (KeyCode::KeyE, _) => Some(letter('e')),
-                        (KeyCode::KeyF, _) => Some(letter('f')),
-                        (KeyCode::KeyG, _) => Some(letter('g')),
-                        (KeyCode::KeyH, _) => Some(letter('h')),
-                        (KeyCode::KeyI, _) => Some(letter('i')),
-                        (KeyCode::KeyJ, _) => Some(letter('j')),
-                        (KeyCode::KeyK, _) => Some(letter('k')),
-                        (KeyCode::KeyL, _) => Some(letter('l')),
-                        (KeyCode::KeyM, _) => Some(letter('m')),
-                        (KeyCode::KeyN, _) => Some(letter('n')),
-                        (KeyCode::KeyO, _) => Some(letter('o')),
-                        (KeyCode::KeyP, _) => Some(letter('p')),
-                        (KeyCode::KeyQ, _) => Some(letter('q')),
-                        (KeyCode::KeyR, _) => Some(letter('r')),
-                        (KeyCode::KeyS, _) => Some(letter('s')),
-                        (KeyCode::KeyT, _) => Some(letter('t')),
-                        (KeyCode::KeyU, _) => Some(letter('u')),
-                        (KeyCode::KeyV, _) => Some(letter('v')),
-                        (KeyCode::KeyW, _) => Some(letter('w')),
-                        (KeyCode::KeyX, _) => Some(letter('x')),
-                        (KeyCode::KeyY, _) => Some(letter('y')),
-                        (KeyCode::KeyZ, _) => Some(letter('z')),
-                        (KeyCode::Space, _) => Some(" ".to_owned()),
-                        (KeyCode::Digit0, s) => Some(if s { ")" } else { "0" }.to_owned()),
-                        (KeyCode::Digit1, s) => Some(if s { "!" } else { "1" }.to_owned()),
-                        (KeyCode::Digit2, s) => Some(if s { "@" } else { "2" }.to_owned()),
-                        (KeyCode::Digit3, s) => Some(if s { "#" } else { "3" }.to_owned()),
-                        (KeyCode::Digit4, s) => Some(if s { "$" } else { "4" }.to_owned()),
-                        (KeyCode::Digit5, s) => Some(if s { "%" } else { "5" }.to_owned()),
-                        (KeyCode::Digit6, s) => Some(if s { "^" } else { "6" }.to_owned()),
-                        (KeyCode::Digit7, s) => Some(if s { "&" } else { "7" }.to_owned()),
-                        (KeyCode::Digit8, s) => Some(if s { "*" } else { "8" }.to_owned()),
-                        (KeyCode::Digit9, s) => Some(if s { "(" } else { "9" }.to_owned()),
-                        (KeyCode::Minus, s) => Some(if s { "_" } else { "-" }.to_owned()),
-                        (KeyCode::Equal, s) => Some(if s { "+" } else { "=" }.to_owned()),
-                        (KeyCode::BracketLeft, s) => Some(if s { "{" } else { "[" }.to_owned()),
-                        (KeyCode::BracketRight, s) => Some(if s { "}" } else { "]" }.to_owned()),
-                        (KeyCode::Semicolon, s) => Some(if s { ":" } else { ";" }.to_owned()),
-                        (KeyCode::Quote, s) => Some(if s { "\"" } else { "'" }.to_owned()),
-                        (KeyCode::Comma, s) => Some(if s { "<" } else { "," }.to_owned()),
-                        (KeyCode::Period, s) => Some(if s { ">" } else { "." }.to_owned()),
-                        (KeyCode::Slash, s) => Some(if s { "?" } else { "/" }.to_owned()),
-                        (KeyCode::Backslash, s) => Some(if s { "|" } else { "\\" }.to_owned()),
-                        (KeyCode::IntlBackslash, s) => Some(if s { "|" } else { "\\" }.to_owned()),
-                        _ => None,
-                    };
-                    match text {
-                        Some(text) => {
-                            v.insert(&text);
-                            true
-                        }
-                        None => false,
-                    }
-                }
+                // The tab digits must not switch tabs under the box; the
+                // character itself still arrives through the char callback.
+                KeyCode::Digit1 | KeyCode::Digit2 | KeyCode::Digit3 => true,
                 _ => false,
             }
         } else {

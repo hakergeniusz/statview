@@ -68,13 +68,18 @@ fn statview_draw(
         let names = |i: &str| game.pack.names.display_item(i);
         horizon_client::stations::hover_name(&names, &stack)
     };
-    let general_rows: Vec<(String, String)> = statview::CUSTOM
-        .iter()
-        .map(|(k, _)| {
-            let label = crate::game::screen_info::tr(&format!("stat.minecraft.{k}"), &[]);
-            (format!("minecraft:{k}"), label)
-        })
-        .collect();
+    let general_rows: Vec<(String, String)> = {
+        let pairs: Vec<(String, String)> = statview::CUSTOM
+            .iter()
+            .map(|(k, _)| {
+                let label = crate::game::screen_info::tr(&format!("stat.minecraft.{k}"), &[]);
+                (format!("minecraft:{k}"), label)
+            })
+            .collect();
+        // The same search filter the other tabs answer — 1.0.2 drew this tab
+        // raw, so its rows ignored the query.
+        statview::with_view(|v| v.rows(pairs, |_, _| 0))
+    };
     let item_rows: Vec<(String, String)> = {
         let ids = game.stat_items();
         let pairs = ids
