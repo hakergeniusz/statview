@@ -2,6 +2,12 @@
 // takes its editing keys while it is focused (Escape lets go of it); Ctrl+F
 // takes it; the digits and Ctrl+Tab move between tabs as the vanilla screen
 // taught. Everything else goes on to the vanilla handler.
+//
+// While the box is focused, printable keys are typed into it here, from the
+// key itself (US layout, shift-aware): the engine's char callback only
+// serves mod-opened screens, so a vanilla screen's hooks never hear typed
+// characters. The key is broken so nothing else sees it; control-held keys
+// stay shortcuts.
 // Copyright (c) 2026 hakergeniusz. MIT.
 fn statview_key(game: &mut crate::game::Game<'_>, key: winit::keyboard::KeyCode) -> core::ops::ControlFlow<()> {
     use crate::game::statview as statview;
@@ -49,75 +55,72 @@ fn statview_key(game: &mut crate::game::Game<'_>, key: winit::keyboard::KeyCode)
                     v.focused = false;
                     true
                 }
-                // A printable key: broken here so the engine's char callback
-                // (which only follows a canceled key) delivers the platform's
-                // own character into the box. Control-held keys stay
-                // shortcuts.
-                _ if !ctrl
-                    && matches!(
-                        key,
-                        KeyCode::KeyA
-                            | KeyCode::KeyB
-                            | KeyCode::KeyC
-                            | KeyCode::KeyD
-                            | KeyCode::KeyE
-                            | KeyCode::KeyF
-                            | KeyCode::KeyG
-                            | KeyCode::KeyH
-                            | KeyCode::KeyI
-                            | KeyCode::KeyJ
-                            | KeyCode::KeyK
-                            | KeyCode::KeyL
-                            | KeyCode::KeyM
-                            | KeyCode::KeyN
-                            | KeyCode::KeyO
-                            | KeyCode::KeyP
-                            | KeyCode::KeyQ
-                            | KeyCode::KeyR
-                            | KeyCode::KeyS
-                            | KeyCode::KeyT
-                            | KeyCode::KeyU
-                            | KeyCode::KeyV
-                            | KeyCode::KeyW
-                            | KeyCode::KeyX
-                            | KeyCode::KeyY
-                            | KeyCode::KeyZ
-                            | KeyCode::Space
-                            | KeyCode::Digit0
-                            | KeyCode::Digit1
-                            | KeyCode::Digit2
-                            | KeyCode::Digit3
-                            | KeyCode::Digit4
-                            | KeyCode::Digit5
-                            | KeyCode::Digit6
-                            | KeyCode::Digit7
-                            | KeyCode::Digit8
-                            | KeyCode::Digit9
-                            | KeyCode::Minus
-                            | KeyCode::Equal
-                            | KeyCode::BracketLeft
-                            | KeyCode::BracketRight
-                            | KeyCode::Semicolon
-                            | KeyCode::Quote
-                            | KeyCode::Backslash
-                            | KeyCode::IntlBackslash
-                            | KeyCode::Comma
-                            | KeyCode::Period
-                            | KeyCode::Slash
-                            | KeyCode::Backquote
-                            | KeyCode::Numpad0
-                            | KeyCode::Numpad1
-                            | KeyCode::Numpad2
-                            | KeyCode::Numpad3
-                            | KeyCode::Numpad4
-                            | KeyCode::Numpad5
-                            | KeyCode::Numpad6
-                            | KeyCode::Numpad7
-                            | KeyCode::Numpad8
-                            | KeyCode::Numpad9
-                    ) =>
-                {
-                    true
+                _ if !ctrl => {
+                    let letter = |base: char| {
+                        if shift {
+                            base.to_ascii_uppercase().to_string()
+                        } else {
+                            base.to_string()
+                        }
+                    };
+                    let text = match (key, shift) {
+                        (KeyCode::KeyA, _) => Some(letter('a')),
+                        (KeyCode::KeyB, _) => Some(letter('b')),
+                        (KeyCode::KeyC, _) => Some(letter('c')),
+                        (KeyCode::KeyD, _) => Some(letter('d')),
+                        (KeyCode::KeyE, _) => Some(letter('e')),
+                        (KeyCode::KeyF, _) => Some(letter('f')),
+                        (KeyCode::KeyG, _) => Some(letter('g')),
+                        (KeyCode::KeyH, _) => Some(letter('h')),
+                        (KeyCode::KeyI, _) => Some(letter('i')),
+                        (KeyCode::KeyJ, _) => Some(letter('j')),
+                        (KeyCode::KeyK, _) => Some(letter('k')),
+                        (KeyCode::KeyL, _) => Some(letter('l')),
+                        (KeyCode::KeyM, _) => Some(letter('m')),
+                        (KeyCode::KeyN, _) => Some(letter('n')),
+                        (KeyCode::KeyO, _) => Some(letter('o')),
+                        (KeyCode::KeyP, _) => Some(letter('p')),
+                        (KeyCode::KeyQ, _) => Some(letter('q')),
+                        (KeyCode::KeyR, _) => Some(letter('r')),
+                        (KeyCode::KeyS, _) => Some(letter('s')),
+                        (KeyCode::KeyT, _) => Some(letter('t')),
+                        (KeyCode::KeyU, _) => Some(letter('u')),
+                        (KeyCode::KeyV, _) => Some(letter('v')),
+                        (KeyCode::KeyW, _) => Some(letter('w')),
+                        (KeyCode::KeyX, _) => Some(letter('x')),
+                        (KeyCode::KeyY, _) => Some(letter('y')),
+                        (KeyCode::KeyZ, _) => Some(letter('z')),
+                        (KeyCode::Space, _) => Some(" ".to_owned()),
+                        (KeyCode::Digit0, s) => Some(if s { ")" } else { "0" }.to_owned()),
+                        (KeyCode::Digit1, s) => Some(if s { "!" } else { "1" }.to_owned()),
+                        (KeyCode::Digit2, s) => Some(if s { "@" } else { "2" }.to_owned()),
+                        (KeyCode::Digit3, s) => Some(if s { "#" } else { "3" }.to_owned()),
+                        (KeyCode::Digit4, s) => Some(if s { "$" } else { "4" }.to_owned()),
+                        (KeyCode::Digit5, s) => Some(if s { "%" } else { "5" }.to_owned()),
+                        (KeyCode::Digit6, s) => Some(if s { "^" } else { "6" }.to_owned()),
+                        (KeyCode::Digit7, s) => Some(if s { "&" } else { "7" }.to_owned()),
+                        (KeyCode::Digit8, s) => Some(if s { "*" } else { "8" }.to_owned()),
+                        (KeyCode::Digit9, s) => Some(if s { "(" } else { "9" }.to_owned()),
+                        (KeyCode::Minus, s) => Some(if s { "_" } else { "-" }.to_owned()),
+                        (KeyCode::Equal, s) => Some(if s { "+" } else { "=" }.to_owned()),
+                        (KeyCode::BracketLeft, s) => Some(if s { "{" } else { "[" }.to_owned()),
+                        (KeyCode::BracketRight, s) => Some(if s { "}" } else { "]" }.to_owned()),
+                        (KeyCode::Semicolon, s) => Some(if s { ":" } else { ";" }.to_owned()),
+                        (KeyCode::Quote, s) => Some(if s { "\"" } else { "'" }.to_owned()),
+                        (KeyCode::Comma, s) => Some(if s { "<" } else { "," }.to_owned()),
+                        (KeyCode::Period, s) => Some(if s { ">" } else { "." }.to_owned()),
+                        (KeyCode::Slash, s) => Some(if s { "?" } else { "/" }.to_owned()),
+                        (KeyCode::Backslash, s) => Some(if s { "|" } else { "\\" }.to_owned()),
+                        (KeyCode::IntlBackslash, s) => Some(if s { "|" } else { "\\" }.to_owned()),
+                        _ => None,
+                    };
+                    match text {
+                        Some(text) => {
+                            v.insert(&text);
+                            true
+                        }
+                        None => false,
+                    }
                 }
                 _ => false,
             }
