@@ -171,8 +171,7 @@ fn statview_draw(
         if focused { 0xFF70_7070 } else { 0xFF40_4040 },
     );
     if search.is_empty() && !focused {
-        let hint = crate::game::screen_info::tr("gui.stats.search_hint", &[]);
-        batch.text(&game.gui.atlas, &hint, bx + 5.0, top + 4.0, 0xFF80_8080, true);
+        batch.text(&game.gui.atlas, "Search", bx + 5.0, top + 4.0, 0xFF80_8080, true);
     } else {
         batch.text(&game.gui.atlas, &search, bx + 5.0, top + 4.0, u32::MAX, true);
         if focused {

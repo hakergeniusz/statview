@@ -49,6 +49,76 @@ fn statview_key(game: &mut crate::game::Game<'_>, key: winit::keyboard::KeyCode)
                     v.focused = false;
                     true
                 }
+                // A printable key: broken here so the engine's char callback
+                // (which only follows a canceled key) delivers the platform's
+                // own character into the box. Control-held keys stay
+                // shortcuts.
+                _ if !ctrl
+                    && matches!(
+                        key,
+                        KeyCode::KeyA
+                            | KeyCode::KeyB
+                            | KeyCode::KeyC
+                            | KeyCode::KeyD
+                            | KeyCode::KeyE
+                            | KeyCode::KeyF
+                            | KeyCode::KeyG
+                            | KeyCode::KeyH
+                            | KeyCode::KeyI
+                            | KeyCode::KeyJ
+                            | KeyCode::KeyK
+                            | KeyCode::KeyL
+                            | KeyCode::KeyM
+                            | KeyCode::KeyN
+                            | KeyCode::KeyO
+                            | KeyCode::KeyP
+                            | KeyCode::KeyQ
+                            | KeyCode::KeyR
+                            | KeyCode::KeyS
+                            | KeyCode::KeyT
+                            | KeyCode::KeyU
+                            | KeyCode::KeyV
+                            | KeyCode::KeyW
+                            | KeyCode::KeyX
+                            | KeyCode::KeyY
+                            | KeyCode::KeyZ
+                            | KeyCode::Space
+                            | KeyCode::Digit0
+                            | KeyCode::Digit1
+                            | KeyCode::Digit2
+                            | KeyCode::Digit3
+                            | KeyCode::Digit4
+                            | KeyCode::Digit5
+                            | KeyCode::Digit6
+                            | KeyCode::Digit7
+                            | KeyCode::Digit8
+                            | KeyCode::Digit9
+                            | KeyCode::Minus
+                            | KeyCode::Equal
+                            | KeyCode::BracketLeft
+                            | KeyCode::BracketRight
+                            | KeyCode::Semicolon
+                            | KeyCode::Quote
+                            | KeyCode::Backslash
+                            | KeyCode::IntlBackslash
+                            | KeyCode::Comma
+                            | KeyCode::Period
+                            | KeyCode::Slash
+                            | KeyCode::Backquote
+                            | KeyCode::Numpad0
+                            | KeyCode::Numpad1
+                            | KeyCode::Numpad2
+                            | KeyCode::Numpad3
+                            | KeyCode::Numpad4
+                            | KeyCode::Numpad5
+                            | KeyCode::Numpad6
+                            | KeyCode::Numpad7
+                            | KeyCode::Numpad8
+                            | KeyCode::Numpad9
+                    ) =>
+                {
+                    true
+                }
                 _ => false,
             }
         } else {

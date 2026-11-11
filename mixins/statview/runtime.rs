@@ -13,7 +13,7 @@
 /// The mod's registry id: the settings folder and the Options > Mods row.
 pub const ID: &str = "statview";
 /// The version the row shows.
-pub const VERSION: &str = "1.0.0";
+pub const VERSION: &str = "1.0.1";
 /// The mod's description for its row.
 pub const DESCRIPTION: &str = "A rebuilt Statistics screen: search that filters, \
 columns that sort, and an item grid with counts at a glance. Clean-room \
