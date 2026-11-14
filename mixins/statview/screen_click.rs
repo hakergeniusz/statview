@@ -1,7 +1,8 @@
-// A click on the rebuilt screen: the Done button, the tabs, the search box,
-// the Items header's sort columns and slots, and the scrollbar all answer
-// here; the mod owns the screen's clicks, so nothing falls through to the
-// vanilla handler while it asks.
+// A click on the rebuilt screen: the Done button, the sidebar's categories,
+// the search box, the Items header's sort columns and slots, and the
+// scrollbar all answer here, over the same geometry the runtime holds; the
+// mod owns the screen's clicks, so nothing falls through to the vanilla
+// handler while it asks.
 // Copyright (c) 2026 hakergeniusz. MIT.
 fn statview_screen_click(game: &mut crate::game::Game<'_>, size: [u32; 2]) -> core::ops::ControlFlow<()> {
     use crate::game::statview as statview;
@@ -13,30 +14,21 @@ fn statview_screen_click(game: &mut crate::game::Game<'_>, size: [u32; 2]) -> co
         return core::ops::ControlFlow::Continue(());
     }
 
-    const TAB_H: f32 = 24.0;
-    const FOOTER: f32 = 33.0;
-    const SEARCH_H: f32 = 16.0;
-    const SLOT: f32 = 20.0;
+    const SLOT: f32 = statview::SLOT;
     let (w, h) = (size[0] as f32, size[1] as f32);
-    let total = w.min(400.0) - 28.0;
-    let tab_w = ((total / 3.0) / 2.0).round() * 2.0;
-    let tab_x0 = ((w - tab_w * 3.0) / 2.0).floor();
-    let left = ((w - 340.0) / 2.0).floor().max(4.0);
-    let content_w = w - left - 16.0;
-    let (top, bottom) = (TAB_H + 4.0, h - FOOTER);
-    let list_top = top + SEARCH_H + 4.0;
     let (cx, cy) = game.cursor;
 
     // The Done button.
-    let (bx, by) = ((w / 2.0 - 100.0).floor(), h - FOOTER + 6.0);
-    if ui::hovered(game.cursor, bx, by, 200.0, 20.0) {
+    let [bx, by, bw, bh] = statview::done_rect(w, h);
+    if ui::hovered(game.cursor, bx, by, bw, bh) {
         game.screen = crate::game::Screen::Paused;
         return core::ops::ControlFlow::Break(());
     }
 
-    // The tabs.
+    // The sidebar's categories.
     for i in 0..3 {
-        if ui::hovered(game.cursor, tab_x0 + tab_w * i as f32, 0.0, tab_w, TAB_H) {
+        let [x, y, cw, ch] = statview::cat_rect(i);
+        if ui::hovered(game.cursor, x, y, cw, ch) {
             statview::with_view(|v| {
                 v.tab_key(Some(i + 1), 0);
             });
@@ -45,8 +37,8 @@ fn statview_screen_click(game: &mut crate::game::Game<'_>, size: [u32; 2]) -> co
     }
 
     // The scrollbar: a click jumps the view there.
-    let bar_x = w - 12.0;
-    if cx >= bar_x && cx <= bar_x + 8.0 && cy >= list_top && cy <= bottom {
+    let (bar_x, top, bottom) = statview::bar_at(w, h);
+    if cx >= bar_x && cx <= bar_x + statview::BAR_W && cy >= top && cy <= bottom {
         statview::with_view(|v| {
             if let Some((t, b, content)) = v.layout {
                 let part = ((cy - t) / (b - t)).clamp(0.0, 1.0);
@@ -58,7 +50,8 @@ fn statview_screen_click(game: &mut crate::game::Game<'_>, size: [u32; 2]) -> co
 
     // The search box: clicking it puts the caret by the letter (the font's
     // own widths decide), clicking anywhere else lets go of it.
-    if ui::hovered(game.cursor, left, top, content_w, SEARCH_H) {
+    let [fx, fy, fw, fh] = statview::SEARCH;
+    if ui::hovered(game.cursor, fx, fy, fw, fh) {
         let atlas = &game.gui.atlas;
         statview::with_view(|v| {
             v.focused = true;
@@ -66,7 +59,7 @@ fn statview_screen_click(game: &mut crate::game::Game<'_>, size: [u32; 2]) -> co
             for (i, n) in (0..=v.search.chars().count())
                 .map(|i| (i, HudBatch::text_width(atlas, &v.search.chars().take(i).collect::<String>())))
             {
-                if cx - left - 5.0 < n + 3.0 {
+                if cx - fx - 5.0 < n + 3.0 {
                     at = i;
                     break;
                 }
@@ -76,38 +69,51 @@ fn statview_screen_click(game: &mut crate::game::Game<'_>, size: [u32; 2]) -> co
         return core::ops::ControlFlow::Break(());
     }
 
+    // The main area: the Items tab's header and grid.
+    let main = statview::main_rect(w, h);
+    let in_main = ui::hovered(game.cursor, main[0], main[1], main[2], main[3]);
+    if !in_main {
+        statview::with_view(|v| v.focused = false);
+        return core::ops::ControlFlow::Break(());
+    }
+    let details = {
+        let v = statview::with_view(|v| v.selected.clone());
+        v.is_some()
+    };
     statview::with_view(|v| {
         v.focused = false;
-        // The Items tab's header and grid.
-        if v.tab == 1 {
-            for (c, _) in statview::ITEM_COLUMNS.into_iter().enumerate() {
-                let hx = left + 2.0 + c as f32 * 64.0;
-                if ui::hovered(game.cursor, hx, list_top, 60.0, 12.0) {
-                    v.sort_clicked(c);
-                    return;
-                }
+        if v.tab != 1 {
+            return;
+        }
+        // The sort header: a column flips or takes over.
+        for (c, _) in statview::ITEM_COLUMNS.into_iter().enumerate() {
+            let hx = main[0] + 4.0 + c as f32 * 64.0;
+            if ui::hovered(game.cursor, hx, main[1], 60.0, statview::SORT_H) {
+                v.sort_clicked(c);
+                return;
             }
-            let cols = ((content_w / SLOT).floor() as usize).max(1);
-            let grid_top = list_top + 14.0;
-            let offset = v.scroll.max(0.0);
-            for i in 0..v.drawn.len() {
-                let (gx, gy) = (i % cols, i / cols);
-                let (x, y) = (left + 2.0 + gx as f32 * SLOT, grid_top + gy as f32 * SLOT - offset);
-                if y >= bottom {
-                    break;
+        }
+        // The grid: a slot toggles the details strip's pick.
+        let grid_top = main[1] + statview::SORT_H + 4.0;
+        let offset = v.scroll.max(0.0);
+        let count = v.drawn.len();
+        for i in 0..count {
+            let (x, uy) = statview::slot_at(w, h, i, details);
+            let y = uy - offset;
+            if y >= main[1] + main[3] {
+                break;
+            }
+            if y < grid_top - SLOT {
+                continue;
+            }
+            if ui::hovered(game.cursor, x, y, SLOT, SLOT) {
+                let id = v.drawn_at(i).map(str::to_owned);
+                if v.selected == id {
+                    v.selected = None;
+                } else {
+                    v.selected = id;
                 }
-                if y < grid_top - SLOT {
-                    continue;
-                }
-                if ui::hovered(game.cursor, x, y, SLOT, SLOT) {
-                    let id = v.drawn_at(i).map(str::to_owned);
-                    if v.selected == id {
-                        v.selected = None;
-                    } else {
-                        v.selected = id;
-                    }
-                    return;
-                }
+                return;
             }
         }
     });

@@ -13,11 +13,107 @@
 /// The mod's registry id: the settings folder and the Options > Mods row.
 pub const ID: &str = "statview";
 /// The version the row shows.
-pub const VERSION: &str = "1.0.2";
+pub const VERSION: &str = "1.1.0";
 /// The mod's description for its row.
-pub const DESCRIPTION: &str = "A rebuilt Statistics screen: search that filters, \
-columns that sort, and an item grid with counts at a glance. Clean-room \
-take on BetterStats Screen's core ideas.";
+pub const DESCRIPTION: &str = "A rebuilt Statistics screen: a sidebar with search and \
+categories, the item grid with a details panel, columns that sort. White-box \
+take on BetterStats Screen's layout (MIT), built from the engine's own parts.";
+
+// ===== The screen's geometry (drawn and clicked alike) =====
+
+/// The left sidebar: the search on top, the three categories under it —
+/// the layout BetterStats Screen made the screen's own.
+pub const SIDEBAR_X: f32 = 8.0;
+pub const SIDEBAR_W: f32 = 122.0;
+/// The search box, in the sidebar's top.
+pub const SEARCH: [f32; 4] = [12.0, 12.0, 108.0, 18.0];
+/// The category buttons under the search, one per tab, in tab order.
+pub const CAT_Y: f32 = 38.0;
+pub const CAT_H: f32 = 20.0;
+pub const CAT_STEP: f32 = 24.0;
+/// The main area, right of the sidebar: the list the wheel scrolls.
+pub const MAIN_X: f32 = 138.0;
+pub const MAIN_GAP: f32 = 10.0;
+pub const LIST_TOP: f32 = 12.0;
+/// The Done button's footer strip at the bottom.
+pub const FOOTER: f32 = 33.0;
+/// The Items tab's sort-header row above the grid.
+pub const SORT_H: f32 = 16.0;
+/// The grid's slot pitch (a vanilla slot: 16 plus the frame).
+pub const SLOT: f32 = 20.0;
+/// The details strip (the picked item's columns), on the main area's right.
+pub const DETAILS_W: f32 = 118.0;
+/// The scrollbar's column, inside the main area's right edge.
+pub const BAR_W: f32 = 10.0;
+
+/// The sidebar's box, full height between two margins.
+pub fn sidebar_rect(h: f32) -> [f32; 4] {
+    [SIDEBAR_X, 8.0, SIDEBAR_W, h - 16.0]
+}
+
+/// Category button `i` (0..3, the tab's order).
+pub fn cat_rect(i: usize) -> [f32; 4] {
+    [
+        SIDEBAR_X + 4.0,
+        CAT_Y + i as f32 * CAT_STEP,
+        SIDEBAR_W - 8.0,
+        CAT_H,
+    ]
+}
+
+/// The main area's box: the list, its scrollbar and the Items grid all live
+/// here.
+pub fn main_rect(w: f32, h: f32) -> [f32; 4] {
+    [MAIN_X, LIST_TOP, w - MAIN_X - MAIN_GAP, h - LIST_TOP - FOOTER]
+}
+
+/// The details strip's box, on the main area's right (the picked item's
+/// columns); present only while an item is picked.
+pub fn details_rect(w: f32, h: f32) -> [f32; 4] {
+    let [mx, my, mw, mh] = main_rect(w, h);
+    [mx + mw - DETAILS_W, my, DETAILS_W, mh]
+}
+
+/// The width the Items grid lays out in: the main area minus the scrollbar's
+/// column, minus the details strip while an item is picked.
+pub fn grid_w(w: f32, h: f32, details: bool) -> f32 {
+    let mw = main_rect(w, h)[2];
+    let mut width = mw - BAR_W;
+    if details {
+        width -= DETAILS_W + 6.0;
+    }
+    width
+}
+
+/// The columns the grid lays out in, under the same rule.
+pub fn grid_cols(w: f32, h: f32, details: bool) -> usize {
+    ((grid_w(w, h, details) / SLOT).floor() as usize).max(1)
+}
+
+/// Slot `i`'s unscrolled top-left in the grid (the view's scroll comes off
+/// the y at draw and click alike).
+pub fn slot_at(w: f32, h: f32, i: usize, details: bool) -> (f32, f32) {
+    let cols = grid_cols(w, h, details);
+    let [mx, _, _, _] = main_rect(w, h);
+    let (gx, gy) = (i % cols, i / cols);
+    (
+        mx + 2.0 + gx as f32 * SLOT,
+        LIST_TOP + SORT_H + 2.0 + gy as f32 * SLOT,
+    )
+}
+
+/// The Done button's box.
+pub fn done_rect(w: f32, h: f32) -> [f32; 4] {
+    [(w / 2.0 - 100.0).floor(), h - FOOTER + 6.0, 200.0, 20.0]
+}
+
+/// The scrollbar's column inside the main area, and the rows' region the
+/// wheel clamps to: `(x, top, bottom)`.
+pub fn bar_at(w: f32, h: f32) -> (f32, f32, f32) {
+    let [mx, my, mw, mh] = main_rect(w, h);
+    (mx + mw - BAR_W, my, my + mh)
+}
+
 
 /// The toggle's setting file (one file per key under the mod's data dir),
 /// read fresh from disk every time a gate runs.
@@ -414,6 +510,46 @@ pub fn stored(on: bool) -> (&'static str, String) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The geometry the draw and the click share: the sidebar, categories,
+    /// main area, details strip and grid all keep their places as the
+    /// window grows, and the grid's columns follow the details strip.
+    #[test]
+    fn the_screen_geometry_holds_together() {
+        let (w, h) = (480.0, 300.0);
+        let main = main_rect(w, h);
+        assert!(main[0] > SIDEBAR_X + SIDEBAR_W, "the main area clears the sidebar");
+        assert_eq!(main[3], h - LIST_TOP - FOOTER, "the footer clears the main area");
+        let (bar_x, top, bottom) = bar_at(w, h);
+        assert!(bar_x >= main[0] + main[2] - BAR_W);
+        assert_eq!((top, bottom), (main[1], main[1] + main[3]));
+        // The details strip eats the grid's width, and the columns follow.
+        let with = grid_cols(w, h, false);
+        let without = grid_cols(w, h, true);
+        assert!(without <= with, "the strip narrows the grid");
+        let (sx, sy) = slot_at(w, h, 0, false);
+        assert_eq!((sx, sy), (MAIN_X + 2.0, LIST_TOP + SORT_H + 2.0));
+        let (sx_n, sy_n) = slot_at(w, h, 1, false);
+        assert_eq!(sy_n, sy, "slot 1 shares slot 0's row");
+        assert!((sx_n - sx - SLOT).abs() < 1e-4, "the column pitch is a slot");
+        let (_, sy_row) = slot_at(w, h, with, false);
+        assert!((sy_row - sy - SLOT).abs() < 1e-4, "the row pitch is a slot");
+        // A tiny window still lays one column out, and nothing goes negative.
+        let small = main_rect(200.0, 120.0);
+        assert!(small[2] > 0.0);
+        assert_eq!(grid_cols(200.0, 120.0, true), 1);
+        for i in 0..3usize {
+            let [x, y, cw, ch] = cat_rect(i);
+            assert!(cw > 0.0 && ch == CAT_H);
+            assert!((y - CAT_Y - i as f32 * CAT_STEP).abs() < 1e-4, "the row {i} stacks");
+            assert!(x > SIDEBAR_X);
+        }
+        assert_eq!(done_rect(w, h)[0], (w / 2.0 - 100.0).floor());
+        assert_eq!(details_rect(w, h)[0] + DETAILS_W, main[0] + main[2], "the strip hugs the main area's right");
+        assert_eq!(sidebar_rect(h)[3], h - 16.0);
+        let _ = SEARCH;
+    }
+
 
     fn setting(value: &str) -> impl Fn(&str) -> Option<String> + '_ {
         move |key| (key == SETTING).then(|| value.to_owned())

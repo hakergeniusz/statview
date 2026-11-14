@@ -1,11 +1,13 @@
-// The rebuilt Statistics screen, drawn whole: the vanilla screen's chrome —
-// menu background, three tabs, Done button — over a search box that filters,
-// Items as a grid of slots with their count as a badge, Mobs and General as
-// rows. Everything on it answers to this mod's view model; the vanilla
-// drawing is skipped while the mod asks (the hook breaks here). Clicks, keys
-// and the wheel belong to the same view and arrive through their own
-// helpers. The atlas is borrowed per call: the grid draws items and tooltips
-// through `&mut game` in its middle.
+// The rebuilt Statistics screen, drawn whole: a left sidebar — the search
+// on top, the three categories under it — and the main area beside it, the
+// layout BetterStats Screen made the screen's own. Rows read uniform white
+// with a hover highlight instead of vanilla's stripes; the Items tab lays a
+// slot grid with count badges and, while an item is picked, a details strip
+// along the right with that item's columns. Everything on it answers to the
+// mod's view model; the vanilla drawing is skipped while the mod asks (the
+// hook breaks here). Clicks, keys and the wheel belong to the same view and
+// arrive through their own helpers, over the same geometry the runtime
+// holds.
 // Copyright (c) 2026 hakergeniusz. MIT.
 fn statview_draw(
     game: &mut crate::game::Game<'_>,
@@ -28,29 +30,22 @@ fn statview_draw(
     });
     let w = batch.width;
     let h = batch.height;
-    ui::menu_background(batch, &game.gui.atlas, 0.0, 0.0, w, h, true);
+    let atlas = &game.gui.atlas;
+    ui::menu_background(batch, atlas, 0.0, 0.0, w, h, true);
 
-    // The screen's bones: the vanilla tab bar's geometry, a search row under
-    // it, the list between, the Done button's footer.
-    const TAB_H: f32 = 24.0;
-    const FOOTER: f32 = 33.0;
-    const SEARCH_H: f32 = 16.0;
     const ROW_H: f32 = 14.0;
-    const SLOT: f32 = 20.0;
-    const MOB_ROW: f32 = 36.0;
-    let total = w.min(400.0) - 28.0;
-    let tab_w = ((total / 3.0) / 2.0).round() * 2.0;
-    let tab_x0 = ((w - tab_w * 3.0) / 2.0).floor();
-    let left = ((w - 340.0) / 2.0).floor().max(4.0);
-    let content_w = w - left - 16.0;
-    let (top, bottom) = (TAB_H + 4.0, h - FOOTER);
-    let list_top = top + SEARCH_H + 4.0;
-    ui::separators(batch, &game.gui.atlas, TAB_H, bottom, true);
+    // The look's palette: dark panels, one indigo accent for what is
+    // selected, white text, a soft row highlight on hover.
+    const PANEL: u32 = 0xF014_1418;
+    const SIDEBAR: u32 = 0xF01A_1A1F;
+    const ACCENT: u32 = 0xFF5B_6EE1;
+    const HOVER: u32 = 0x28FF_FFFF;
+    const HAIRLINE: u32 = 0xFF3C_3C44;
+    const DIM: u32 = 0xFFB0_B0B8;
+    const BADGE: u32 = 0xFFFF_FF55;
 
     // The view's own numbers first: what the search holds, and the rows each
-    // tab shows once the search filtered them. The atlas is borrowed per
-    // call everywhere below — the grid draws items and tooltips through
-    // `&mut game` in its middle.
+    // tab shows once the search filtered them.
     let (tab, search, caret, focused, sort_col, sort_asc, selected) =
         statview::with_view(|v| {
             (
@@ -76,8 +71,6 @@ fn statview_draw(
                 (format!("minecraft:{k}"), label)
             })
             .collect();
-        // The same search filter the other tabs answer — 1.0.2 drew this tab
-        // raw, so its rows ignored the query.
         statview::with_view(|v| v.rows(pairs, |_, _| 0))
     };
     let item_rows: Vec<(String, String)> = {
@@ -108,94 +101,106 @@ fn statview_draw(
     let drawn: Vec<String> = item_rows.iter().map(|(id, _)| id.clone()).collect();
     statview::with_view(|v| v.drawn = drawn);
 
-    // The list's height, by the tab.
-    let cols = ((content_w / SLOT).floor() as usize).max(1);
+    let main = statview::main_rect(w, h);
+    let [mx, my, mw, mh] = main;
+    let details = tab == 1 && selected.is_some();
+    let cols = statview::grid_cols(w, h, details);
     let grid_rows = item_rows.len().div_ceil(cols);
     let content = match tab {
         0 => ROW_H * general_rows.len() as f32 + 4.0,
-        1 => SLOT * grid_rows as f32 + 4.0 + 14.0,
+        1 => statview::SORT_H + 2.0 + statview::SLOT * grid_rows as f32 + 4.0,
         _ => MOB_ROW * mob_rows.len() as f32 + 4.0,
     };
     let scroll = statview::with_view(|v| {
-        v.clamp(list_top, bottom, content);
-        v.layout = Some((list_top, bottom, content));
+        v.clamp(my, my + mh, content);
+        v.layout = Some((my, my + mh, content));
         v.scroll
     });
+    const MOB_ROW: f32 = 36.0;
 
-    // The tab bar, as the vanilla screen draws it.
-    const TABS: [&str; 3] = ["stat.generalButton", "stat.itemsButton", "stat.mobsButton"];
-    for (i, key) in TABS.into_iter().enumerate() {
-        let x = tab_x0 + tab_w * i as f32;
-        let selected = tab == i;
-        let hover = ui::hovered(game.cursor, x, 0.0, tab_w, TAB_H);
-        let sprite = match (selected, hover) {
-            (true, true) => "gui/sprites/widget/tab_selected_highlighted",
-            (true, false) => "gui/sprites/widget/tab_selected",
-            (false, true) => "gui/sprites/widget/tab_highlighted",
-            (false, false) => "gui/sprites/widget/tab",
-        };
-        ui::nine_slice(batch, &game.gui.atlas, sprite, x, 0.0, tab_w, TAB_H, u32::MAX);
-        ui::menu_tab_label(
-            batch,
-            &game.gui.atlas,
-            &Text::translate(key, &[]),
-            (x, 0.0, tab_w, TAB_H),
-            selected,
-            true,
-            horizon_client::hud_overlays::now_ms(),
-        );
-        if selected {
-            batch.fill(&game.gui.atlas, x + 2.0, TAB_H - 3.0, tab_w - 4.0, 1.0, u32::MAX);
-        }
-    }
-
-    // The search box, its text and its caret.
-    let (bx, bw) = (left, content_w);
+    // ===== The sidebar =====
+    let side = statview::sidebar_rect(h);
+    batch.fill(atlas, side[0], side[1], side[2], side[3], SIDEBAR);
+    batch.fill(atlas, side[0], side[1], 1.0, side[3], HAIRLINE);
     batch.fill(
-        &game.gui.atlas,
-        bx,
-        top,
-        bw,
-        SEARCH_H,
+        atlas,
+        side[0] + side[2] - 1.0,
+        side[1],
+        1.0,
+        side[3],
+        HAIRLINE,
+    );
+    // The search box, its text and its caret.
+    let [fx, fy, fw, fh] = statview::SEARCH;
+    batch.fill(
+        atlas,
+        fx,
+        fy,
+        fw,
+        fh,
         if focused { 0xFF10_1010 } else { 0xFF18_1818 },
     );
-    batch.fill(
-        &game.gui.atlas,
-        bx,
-        top,
-        bw,
-        1.0,
-        if focused { 0xFF70_7070 } else { 0xFF40_4040 },
-    );
-    batch.fill(
-        &game.gui.atlas,
-        bx,
-        top + SEARCH_H - 1.0,
-        bw,
-        1.0,
-        if focused { 0xFF70_7070 } else { 0xFF40_4040 },
-    );
+    let edge = if focused { 0xFF5B_6EE1 } else { HAIRLINE };
+    batch.fill(atlas, fx, fy, fw, 1.0, edge);
+    batch.fill(atlas, fx, fy + fh - 1.0, fw, 1.0, edge);
     if search.is_empty() && !focused {
-        batch.text(&game.gui.atlas, "Search", bx + 5.0, top + 4.0, 0xFF80_8080, true);
+        batch.text(atlas, "Search", fx + 5.0, fy + 5.0, 0xFF80_8080, true);
     } else {
-        batch.text(&game.gui.atlas, &search, bx + 5.0, top + 4.0, u32::MAX, true);
+        batch.text(atlas, &search, fx + 5.0, fy + 5.0, u32::MAX, true);
         if focused {
             let before: String = search.chars().take(caret).collect();
-            let cx = bx + 6.0 + HudBatch::text_width(&game.gui.atlas, &before);
-            batch.fill(&game.gui.atlas, cx, top + 3.0, 1.0, SEARCH_H - 6.0, u32::MAX);
+            let cx = fx + 6.0 + HudBatch::text_width(atlas, &before);
+            batch.fill(atlas, cx, fy + 3.0, 1.0, fh - 6.0, u32::MAX);
         }
     }
+    // The categories, the tab's own order; the picked one carries the accent.
+    const TABS: [&str; 3] = ["stat.generalButton", "stat.itemsButton", "stat.mobsButton"];
+    for (i, key) in TABS.into_iter().enumerate() {
+        let [x, y, cw, ch] = statview::cat_rect(i);
+        let hover = ui::hovered(game.cursor, x, y, cw, ch);
+        let fill = if tab == i {
+            ACCENT
+        } else if hover {
+            HOVER
+        } else {
+            0x18FF_FFFF
+        };
+        batch.fill(atlas, x, y, cw, ch, fill);
+        batch.text(
+            atlas,
+            &Text::translate(key, &[]).plain(),
+            x + 8.0,
+            y + 6.0,
+            if tab == i { u32::MAX } else { DIM },
+            true,
+        );
+    }
 
-    // The rows, clipped to the list.
-    let row_y = |i: f32, rh: f32| list_top + 4.0 + i * rh - scroll;
-    let visible = |y: f32, rh: f32| y >= list_top && y + rh <= bottom;
+    // ===== The main area =====
+    batch.fill(atlas, mx, my, mw, mh, PANEL);
+    batch.fill(atlas, mx, my, mw, 1.0, HAIRLINE);
+    let row_y = |i: f32, rh: f32| my + 4.0 + i * rh - scroll;
+    let visible = |y: f32, rh: f32| y >= my && y + rh <= my + mh;
+    // The hovered row, for the highlight the stripes used to fake.
+    let hovered_row = |rh: f32| {
+        let (cx, cy) = game.cursor;
+        if cx < mx || cx >= mx + mw - statview::BAR_W || cy < my || cy >= my + mh {
+            return usize::MAX;
+        }
+        let i = ((cy - my - 4.0 + scroll) / rh).floor();
+        (i >= 0.0).then(|| i as usize).unwrap_or(usize::MAX)
+    };
     match tab {
-        // General: the label left, the value right.
+        // General: the label left, the value right, uniform white.
         0 => {
+            let pick = hovered_row(ROW_H);
             for (i, (key, label)) in general_rows.iter().enumerate() {
                 let y = row_y(i as f32, ROW_H);
                 if !visible(y, ROW_H) {
                     continue;
+                }
+                if i == pick {
+                    batch.fill(atlas, mx + 2.0, y, mw - statview::BAR_W - 4.0, ROW_H, HOVER);
                 }
                 let f = statview::CUSTOM
                     .iter()
@@ -203,107 +208,113 @@ fn statview_draw(
                     .map(|(_, f)| *f)
                     .unwrap_or(statview::Format::Default);
                 let value = statview::format(f, game.stats.get("custom", key));
-                let color = if i % 2 == 0 { u32::MAX } else { 0xFFBA_BABA };
-                batch.text(&game.gui.atlas, label, left + 2.0, (y + 2.0).floor(), color, true);
-                let tw = HudBatch::text_width(&game.gui.atlas, &value);
+                batch.text(atlas, label, mx + 6.0, (y + 3.0).floor(), u32::MAX, true);
+                let tw = HudBatch::text_width(atlas, &value);
                 batch.text(
-                    &game.gui.atlas,
+                    atlas,
                     &value,
-                    left + content_w - tw - 6.0,
-                    (y + 2.0).floor(),
-                    color,
+                    mx + mw - statview::BAR_W - tw - 8.0,
+                    (y + 3.0).floor(),
+                    DIM,
                     true,
                 );
             }
         }
-        // Items: a grid of slots, the sorted column's count as a badge, the
-        // picked slot's columns in a strip above the footer.
+        // Items: the sort header, the grid with count badges, and the
+        // picked item's details strip along the right.
         1 => {
+            let grid_w = statview::grid_w(w, h, details);
             for (c, ty) in statview::ITEM_COLUMNS.into_iter().enumerate() {
-                let hx = left + 2.0 + c as f32 * 64.0;
-                let hy = list_top;
-                if hy >= bottom {
+                let hx = mx + 4.0 + c as f32 * 64.0;
+                if hx >= mx + grid_w {
                     break;
                 }
                 let label = crate::game::screen_info::tr(&format!("stat_type.minecraft.{ty}"), &[]);
-                batch.text(&game.gui.atlas, &label, hx, hy + 3.0, 0xFF80_8080, true);
+                batch.text(atlas, &label, hx, my + 4.0, DIM, true);
                 let marker = if sort_col == c {
                     if sort_asc { "^" } else { "v" }
                 } else {
                     " "
                 };
-                batch.text(&game.gui.atlas, marker, hx + 52.0, hy + 3.0, u32::MAX, true);
+                batch.text(atlas, marker, hx + 52.0, my + 4.0, ACCENT, true);
             }
-            let grid_top = list_top + 14.0;
+            let grid_top = my + statview::SORT_H + 4.0;
             let offset = scroll.max(0.0);
             for (i, (id, _)) in item_rows.iter().enumerate() {
-                let (gx, gy) = (i % cols, i / cols);
-                let (x, y) = (
-                    left + 2.0 + gx as f32 * SLOT,
-                    grid_top + gy as f32 * SLOT - offset,
-                );
-                if y < grid_top - SLOT || y + SLOT > bottom {
+                let (x, uy) = statview::slot_at(w, h, i, details);
+                let y = uy - offset;
+                if y < grid_top - statview::SLOT || y + statview::SLOT > my + mh {
                     continue;
                 }
+                // Fresh per row: the tooltip at the bottom takes the game
+                // mutably, and this loop runs again after it.
+                let atlas = &game.gui.atlas;
                 let stack = ItemStack::new(id, 1);
                 let picked = selected.as_deref() == Some(id.as_str());
-                batch.sprite(&game.gui.atlas, "gui/sprites/container/slot", x, y);
+                batch.sprite(atlas, "gui/sprites/container/slot", x, y);
                 game.draw_item(batch, &stack, x + 2.0, y + 2.0);
                 if picked {
-                    batch.fill(&game.gui.atlas, x, y, SLOT, 1.0, u32::MAX);
-                    batch.fill(&game.gui.atlas, x, y + SLOT - 1.0, SLOT, 1.0, u32::MAX);
-                    batch.fill(&game.gui.atlas, x, y, 1.0, SLOT, u32::MAX);
-                    batch.fill(&game.gui.atlas, x + SLOT - 1.0, y, 1.0, SLOT, u32::MAX);
+                    let edge = ACCENT;
+                    batch.fill(atlas, x, y, statview::SLOT, 1.0, edge);
+                    batch.fill(atlas, x, y + statview::SLOT - 1.0, statview::SLOT, 1.0, edge);
+                    batch.fill(atlas, x, y, 1.0, statview::SLOT, edge);
+                    batch.fill(atlas, x + statview::SLOT - 1.0, y, 1.0, statview::SLOT, edge);
+                } else if ui::hovered(game.cursor, x, y, statview::SLOT, statview::SLOT) {
+                    batch.fill(atlas, x, y, statview::SLOT, statview::SLOT, HOVER);
                 }
                 let count = game.stats.get(statview::ITEM_COLUMNS[sort_col], id);
                 if count > 0 {
                     let text = statview::format(statview::Format::Default, count);
-                    let tw = HudBatch::text_width(&game.gui.atlas, &text);
+                    let tw = HudBatch::text_width(atlas, &text);
                     batch.text(
-                        &game.gui.atlas,
+                        atlas,
                         &text,
-                        x + SLOT - tw - 1.0,
-                        y + SLOT - 10.0,
-                        0xFFFF_FF55,
+                        x + statview::SLOT - tw - 1.0,
+                        y + statview::SLOT - 10.0,
+                        BADGE,
                         true,
                     );
                 }
-                if ui::hovered(game.cursor, x, y, SLOT, SLOT) {
-                    game.draw_stack_tooltip(batch, &stack, x + SLOT, y + SLOT);
+                if ui::hovered(game.cursor, x, y, statview::SLOT, statview::SLOT) {
+                    game.draw_stack_tooltip(batch, &stack, x + statview::SLOT, y + statview::SLOT);
                 }
             }
-            if let Some(id) = &selected {
-                let name = item_name(game, id);
-                let strip_y = bottom - 16.0;
-                batch.fill(&game.gui.atlas, left, strip_y, content_w, 14.0, 0xFF10_1010);
-                batch.text(&game.gui.atlas, &name, left + 4.0, strip_y + 2.0, u32::MAX, true);
-                let mut x = left + content_w * 0.3;
-                for (c, ty) in statview::ITEM_COLUMNS.into_iter().enumerate() {
-                    let label =
-                        crate::game::screen_info::tr(&format!("stat_type.minecraft.{ty}"), &[]);
-                    let value =
-                        statview::format(statview::Format::Default, game.stats.get(ty, id));
-                    batch.text(
-                        &game.gui.atlas,
-                        &format!("{label}: {value}"),
-                        x,
-                        strip_y + 2.0,
-                        0xFFBA_BABA,
-                        true,
-                    );
-                    x += 90.0;
-                    if c == 1 {
+            // The tooltip took the game mutably, so the atlas borrow is
+            // retaken here for the details strip.
+            let atlas = &game.gui.atlas;
+            // The details strip: the picked item's name and its six columns,
+            // one line a piece, over the accent the selection carries.
+            if details {
+                let id = selected.expect("details only while an item is picked");
+                let [dx, dy, dw, dh] = statview::details_rect(w, h);
+                batch.fill(atlas, dx, dy, dw, dh, SIDEBAR);
+                batch.fill(atlas, dx, dy, 1.0, dh, ACCENT);
+                let name = item_name(game, &id);
+                let mut y = dy + 6.0;
+                batch.text(atlas, &name, dx + 6.0, y, u32::MAX, true);
+                y += ROW_H + 2.0;
+                for ty in statview::ITEM_COLUMNS {
+                    let label = crate::game::screen_info::tr(&format!("stat_type.minecraft.{ty}"), &[]);
+                    let value = statview::format(statview::Format::Default, game.stats.get(ty, &id));
+                    batch.text(atlas, &label, dx + 6.0, y, DIM, true);
+                    batch.text(atlas, &value, dx + 6.0, y + 9.0, u32::MAX, true);
+                    y += 21.0;
+                    if y + 20.0 > dy + dh {
                         break;
                     }
                 }
             }
         }
-        // Mobs: the name, its kills and its killed-by, as the vanilla rows read.
+        // Mobs: the name, its kills and its killed-by, uniform white.
         _ => {
+            let pick = hovered_row(MOB_ROW);
             for (i, (mob, _name)) in mob_rows.iter().enumerate() {
                 let y = row_y(i as f32, MOB_ROW);
                 if !visible(y, MOB_ROW) {
                     continue;
+                }
+                if i == pick {
+                    batch.fill(atlas, mx + 2.0, y, mw - statview::BAR_W - 4.0, MOB_ROW, HOVER);
                 }
                 let mob_name = Text::translate(&format!("entity.{}", mob.replace(':', ".")), &[]);
                 let kills = game.stats.get("killed", mob);
@@ -331,28 +342,32 @@ fn statview_draw(
                     )
                 };
                 let (kc, bc) = (
-                    if kills > 0 { 0xFFBA_BABA } else { 0xFF80_8080 },
-                    if by > 0 { 0xFFBA_BABA } else { 0xFF80_8080 },
+                    if kills > 0 { DIM } else { 0xFF80_8080 },
+                    if by > 0 { DIM } else { 0xFF80_8080 },
                 );
-                batch.text_styled(&game.gui.atlas, &mob_name, left + 2.0, y + 1.0, u32::MAX, true);
-                batch.text_styled(&game.gui.atlas, &k, left + 12.0, y + 10.0, kc, true);
-                batch.text_styled(&game.gui.atlas, &b, left + 12.0, y + 19.0, bc, true);
+                batch.text_styled(atlas, &mob_name, mx + 6.0, y + 1.0, u32::MAX, true);
+                batch.text_styled(atlas, &k, mx + 16.0, y + 10.0, kc, true);
+                batch.text_styled(atlas, &b, mx + 16.0, y + 19.0, bc, true);
             }
         }
     }
-    let bar_x = w - 12.0;
-    ui::scrollbar(batch, &game.gui.atlas, bar_x, list_top, bottom, content, scroll);
+    // Retaken for the scrollbar and the footer: the details strip's borrow
+    // ended with its block.
+    let atlas = &game.gui.atlas;
+    // The scrollbar, down the main area's right.
+    let (bar_x, top, bottom) = statview::bar_at(w, h);
+    ui::scrollbar(batch, atlas, bar_x, top, bottom, content, scroll);
     // The footer's Done button.
-    let (bx, by) = ((w / 2.0 - 100.0).floor(), h - FOOTER + 6.0);
-    let hover = ui::hovered(game.cursor, bx, by, 200.0, 20.0);
+    let [bx, by, bw, bh] = statview::done_rect(w, h);
+    let hover = ui::hovered(game.cursor, bx, by, bw, bh);
     ui::action_button(
         batch,
-        &game.gui.atlas,
+        atlas,
         horizon_client::widgets::Action::Done,
         bx,
         by,
-        200.0,
-        20.0,
+        bw,
+        bh,
         &Text::translate("gui.done", &[]),
         true,
         hover,

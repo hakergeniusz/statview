@@ -1,6 +1,6 @@
 [mod]
 id = "statview"
-version = "1.0.3"
+version = "1.1.0"
 priority = 100
 
 # The commit it was tested on: it redraws the Statistics screen whole and
